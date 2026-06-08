@@ -19,6 +19,8 @@
 9. [Docker & Local Dev Setup](#9-docker--local-dev-setup)
 10. [Testing Strategy](#10-testing-strategy)
 11. [Open Questions & Decision Log](#11-open-questions--decision-log)
+12. [Local Setup Checklist](#12-local-setup-checklist)
+13. [Claude Code vs. Docker — Build Sequence](#13-claude-code-vs-docker--build-sequence)
 
 ---
 
@@ -671,6 +673,169 @@ uvicorn api.main:app --reload --port 8000
 | 5 | Include `raw_json` JSONB column on all raw tables? | Yes — recovery mechanism; drop if storage is a concern | TBD |
 | 6 | API auth? | Out of scope for v1; add API key middleware in v2 | TBD |
 | 7 | Which Synthea population size for demos? | 500 patients — large enough to be interesting, fast to generate | TBD |
+
+---
+
+## 12. Local Setup Checklist
+
+Use this before your first Claude Code session and again when you sit down at home to validate.
+
+### At work (no Docker required)
+
+- [ ] **Python 3.11+** — `python --version`
+- [ ] **pip / virtualenv** — `pip install virtualenv` if missing
+- [ ] **Git** — `git --version`
+- [ ] **Claude Code** — installed and authenticated
+- [ ] **Sample FHIR bundles** — download 2–3 from the Synthea examples repo (no Java needed):
+  ```
+  https://github.com/synthetichealth/synthea/tree/master/src/test/resources/generic
+  ```
+  Or grab the pre-generated samples from:
+  ```
+  https://synthea.mitre.org/downloads  (select "FHIR R4 samples")
+  ```
+- [ ] **Python dependencies installed in a venv:**
+  ```bash
+  python -m venv .venv && source .venv/bin/activate
+  pip install fastapi uvicorn sqlalchemy asyncpg psycopg2-binary \
+              dbt-core dbt-postgres pytest httpx pydantic
+  ```
+
+That's it. Everything else runs inside Claude Code's sandbox.
+
+---
+
+### At home (full validation)
+
+- [ ] **Docker Desktop** installed and running — `docker --version`
+- [ ] **Java 11+ JRE** (for Synthea) — `java -version`; install via:
+  ```bash
+  # macOS
+  brew install openjdk@11
+  # or download from https://adoptium.net
+  ```
+- [ ] **Synthea JAR** downloaded:
+  ```bash
+  wget https://github.com/synthetichealth/synthea/releases/latest/download/synthea-with-dependencies.jar
+  ```
+- [ ] **Docker Compose working** — `docker compose version`
+- [ ] **Ports 5432 and 8000 free** — nothing else using them locally
+- [ ] **`.env` file created** from `.env.example` with correct `DATABASE_URL`
+- [ ] **`docker compose up`** starts without errors
+- [ ] **Synthea generates data** — run with `-p 50` first as a smoke test
+- [ ] **Ingestion runs clean** — `python -m ingestion.loader` with no uncaught errors
+- [ ] **dbt runs and tests pass** — `dbt run && dbt test`
+- [ ] **API responds** — `curl http://localhost:8000/health` returns `{"status": "ok"}`
+
+---
+
+## 13. Claude Code vs. Docker — Build Sequence
+
+This section maps every task in the project to where it should be built and validated. The goal: arrive home with working, tested code — not debugging code from scratch.
+
+### Legend
+- 🟢 **Claude Code** — fully buildable and verifiable in Claude Code's sandbox (no Docker, no DB)
+- 🟡 **Claude Code + mock** — buildable in Claude Code; uses SQLite or in-memory stand-in instead of Postgres
+- 🔴 **Requires Docker** — needs a real Postgres connection or Synthea JAR to validate end-to-end
+
+---
+
+### Phase 1 — Synthea
+
+| Task | Where | Notes |
+|---|---|---|
+| Write Synthea run script / Makefile target | 🟢 Claude Code | Just shell commands; no execution needed |
+| Download sample bundles for fixtures | 🟢 Claude Code | Claude Code can `curl` the Synthea samples repo |
+| Validate bundle structure looks as expected | 🟢 Claude Code | `python -c "import json; print(json.load(open('sample.json')).keys())"` |
+| Actually generate 500 patients | 🔴 Requires Docker | Needs Java + Synthea JAR |
+
+---
+
+### Phase 2 — Ingestion Parsers
+
+| Task | Where | Notes |
+|---|---|---|
+| Write all six parser modules | 🟢 Claude Code | Pure Python dict manipulation |
+| Write `extract_ref_id` and other helpers | 🟢 Claude Code | Unit-testable with no dependencies |
+| Write `loader.py` dispatch logic | 🟢 Claude Code | Can run against local sample JSON files |
+| Write `ingestion/tests/test_parsers.py` | 🟢 Claude Code | `pytest` runs fully in sandbox |
+| **Run pytest against sample bundles** | 🟢 Claude Code | ✅ Real validation — Claude Code executes this |
+| Test DB insert functions | 🟡 Claude Code + mock | Swap Postgres for SQLite in tests; swap back before home |
+| Run ingestion against real Postgres | 🔴 Requires Docker | Needs `docker compose up postgres` |
+
+---
+
+### Phase 3 — Raw Schema DDL
+
+| Task | Where | Notes |
+|---|---|---|
+| Write `sql/create_schemas.sql` | 🟢 Claude Code | Pure SQL authoring |
+| Lint / review DDL for correctness | 🟢 Claude Code | Claude Code can parse and validate SQL syntax |
+| Apply DDL to real Postgres | 🔴 Requires Docker | `psql $DATABASE_URL -f sql/create_schemas.sql` |
+
+---
+
+### Phase 4 — dbt Models
+
+| Task | Where | Notes |
+|---|---|---|
+| Write all staging models (`stg_*.sql`) | 🟢 Claude Code | SQL authoring; no DB needed |
+| Write all mart models (`dim_*.sql`, `fct_*.sql`) | 🟢 Claude Code | SQL authoring; no DB needed |
+| Write `schema.yml` with column tests | 🟢 Claude Code | YAML authoring |
+| Write `dbt_project.yml` and `profiles.yml` | 🟢 Claude Code | Config authoring |
+| **`dbt compile`** (no DB, just SQL rendering) | 🟢 Claude Code | ✅ Catches Jinja/ref errors without a DB connection |
+| `dbt run` (executes models against Postgres) | 🔴 Requires Docker | Needs live DB with raw data loaded |
+| `dbt test` (runs schema tests) | 🔴 Requires Docker | Needs live DB with data |
+
+> **Tip:** `dbt compile` is your best friend in Claude Code. It renders all models to pure SQL and catches broken `{{ ref() }}` calls, missing sources, and Jinja errors — without touching a database.
+
+---
+
+### Phase 5 — FastAPI
+
+| Task | Where | Notes |
+|---|---|---|
+| Write all routers and schemas | 🟢 Claude Code | Pure Python authoring |
+| Write Pydantic response models | 🟢 Claude Code | No DB needed |
+| Write `db.py` connection logic | 🟢 Claude Code | Abstracted behind env var |
+| **Run FastAPI with `uvicorn`** | 🟢 Claude Code | ✅ Server starts; `/health` and `/docs` respond immediately |
+| **Run API tests with `TestClient`** | 🟡 Claude Code + mock | FastAPI's `TestClient` + SQLite fixture gives real endpoint coverage |
+| Hit API against real mart data | 🔴 Requires Docker | Needs Postgres populated by dbt |
+
+---
+
+### Phase 6 — Docker & Integration
+
+| Task | Where | Notes |
+|---|---|---|
+| Write `docker-compose.yml` | 🟢 Claude Code | Config authoring |
+| Write `Dockerfile.ingestion` + `Dockerfile.api` | 🟢 Claude Code | Config authoring |
+| Write `.env.example` | 🟢 Claude Code | Config authoring |
+| **`docker compose up`** | 🔴 Requires Docker | Full stack integration |
+| **Full pipeline smoke test** | 🔴 Requires Docker | Synthea → ingest → dbt → API |
+
+---
+
+### Summary: what you can accomplish at work
+
+By the end of a Claude Code session you should have:
+
+- ✅ All six parsers written and **pytest passing** against real sample Synthea JSON
+- ✅ All DDL written and reviewed
+- ✅ All dbt models written and **`dbt compile` passing** (no broken refs)
+- ✅ FastAPI running locally with **`/health` and `/docs` responding**
+- ✅ API tests passing with mock DB fixtures
+- ✅ Docker configs written and ready to use
+
+When you sit down at home, the sequence is:
+```bash
+docker compose up -d postgres
+python -m ingestion.loader          # already tested; should just work
+cd dbt_project && dbt run && dbt test
+uvicorn api.main:app --port 8000
+curl http://localhost:8000/patients  # real data
+```
+Home time is **validation**, not debugging.
 
 ---
 
