@@ -1,0 +1,24 @@
+# Synthea output — can be large
+data/synthea_output/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+dbt_project/profiles.yml
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/
