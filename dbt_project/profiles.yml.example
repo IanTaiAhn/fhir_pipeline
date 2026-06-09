@@ -1,0 +1,12 @@
+fhir_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: fhir
+      password: fhir
+      dbname: fhir_db
+      schema: public
+      threads: 4

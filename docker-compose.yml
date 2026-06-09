@@ -1,0 +1,42 @@
+services:
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: fhir
+      POSTGRES_PASSWORD: fhir
+      POSTGRES_DB: fhir_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/create_schemas.sql:/docker-entrypoint-initdb.d/01_create_schemas.sql
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fhir:fhir@postgres:5432/fhir_db
+      SYNTHEA_OUTPUT_DIR: /app/data/synthea_output
+    volumes:
+      - ./data/synthea_output:/app/data/synthea_output
+    profiles: [ingestion]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://fhir:fhir@postgres:5432/fhir_db
+
+volumes:
+  pgdata:

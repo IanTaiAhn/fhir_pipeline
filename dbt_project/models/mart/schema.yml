@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: dim_patients
+    description: Patient dimension — one row per patient, analytics-ready.
+    columns:
+      - name: patient_id
+        tests: [unique, not_null]
+
+  - name: dim_conditions
+    columns:
+      - name: condition_id
+        tests: [unique, not_null]
+      - name: patient_id
+        tests: [not_null]
+
+  - name: fct_encounters
+    columns:
+      - name: encounter_id
+        tests: [unique, not_null]
+      - name: patient_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_patients')
+              field: patient_id
+
+  - name: fct_observations
+    columns:
+      - name: observation_id
+        tests: [unique, not_null]
+      - name: patient_id
+        tests: [not_null]
+
+  - name: fct_claims
+    columns:
+      - name: claim_id
+        tests: [unique, not_null]
+      - name: patient_id
+        tests: [not_null]
