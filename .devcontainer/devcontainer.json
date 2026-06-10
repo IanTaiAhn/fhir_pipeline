@@ -1,0 +1,45 @@
+{
+  "name": "FHIR Pipeline",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "11",
+      "installMaven": false,
+      "installGradle": false
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "dockerDashComposeVersion": "v2"
+    }
+  },
+
+  "postCreateCommand": "pip install -r requirements.txt",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "innoverio.vscode-dbt-power-user",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+
+  "remoteEnv": {
+    "DATABASE_URL": "postgresql://fhir:fhir@localhost:5432/fhir_db",
+    "SYNTHEA_OUTPUT_DIR": "${containerWorkspaceFolder}/data/synthea_output",
+    "LOG_LEVEL": "INFO"
+  },
+
+  "forwardPorts": [5432, 8000],
+  "portsAttributes": {
+    "5432": { "label": "Postgres" },
+    "8000": { "label": "FHIR API" }
+  }
+}
