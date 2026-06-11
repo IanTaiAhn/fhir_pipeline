@@ -2,6 +2,33 @@
 
 Follow these steps to confirm the pipeline is working end to end.
 
+## Prerequisites
+
+### Option A: Dev Container (Recommended)
+
+The repo includes a pre-configured dev container that handles Python 3.11, Java 11
+(for Synthea), Docker Compose, and all VS Code extensions automatically.
+
+**Setup:**
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) for Windows
+   - Enable WSL2 first: open PowerShell as admin and run `wsl --install`, then reboot
+   - During Docker Desktop install, select **"Use WSL2 backend"**
+2. Install the [VS Code Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+3. Open this repo in VS Code, then click **"Reopen in Container"** when prompted
+   (or press `F1` → `Dev Containers: Reopen in Container`)
+
+Once inside the container, all tools are ready — skip to Step 1 below.
+
+### Option B: Native Windows / Mac / Linux
+
+You'll need to install manually:
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL2 backend on Windows)
+- Python 3.11+ with `pip install -r requirements.txt`
+- Java 11+ (for Synthea in Step 2)
+- dbt-postgres: `pip install dbt-core dbt-postgres`
+
+---
+
 ## 1. Start Postgres
 
 ```bash
